@@ -4,5 +4,5 @@ spring:
 
   # Apunta a la configuración centralizada Config Server.
   config:
-    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
-    # import: "optional:configserver:http://localhost:8888" #para local
+#    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888} # para docker
+    import: "optional:configserver:http://localhost:8888" # para local
