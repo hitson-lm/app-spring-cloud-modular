@@ -1,0 +1,20 @@
+server:
+  port: 8761
+
+eureka:
+  instance:
+    hostname: localhost # En este caso, se establece como localhost, lo que significa que el servidor Eureka se ejecutará en la misma máquina donde se encuentra esta aplicación.
+  client:
+    registerWithEureka: false # para no registrar el propio servidor Eureka en sí mismo.
+    fetchRegistry: false   # para no intentar obtener el registro de servicios de otros servidores Eureka.
+    serviceUrl:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/ # Especifica la URL del servidor Eureka. URL completa sería http://localhost:8761/eureka/, acceder al servidor Eureka para registrar y descubrir servicios.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info, beans, metrics, env
+  endpoint:
+    health:
+      show-details: always

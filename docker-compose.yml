@@ -1,0 +1,127 @@
+services:
+  # crea el contenedor mongodb en docker con la imagen oficial de mongo.
+  mongodb:
+    image: mongo
+    container_name: mongo_db
+    ports:
+      - "${MONGO_DB_PORT}:27017"
+    volumes:
+      - mongo:/data/db
+    restart: always
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_DB_PASSWORD}
+    networks:
+      - microservices
+
+  # crea el contenedor postgresql en docker con la imagen oficial de postgres.
+  postgresql:
+    container_name: postgresql_db
+    image: postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRESQL_DB_USERNAME}
+      - POSTGRES_PASSWORD=${POSTGRESQL_DB_PASSWORD}
+      - POSTGRES_DB=${PRODUCT_DB_NAME}
+      - PGDATA=/data/postgres
+    volumes:
+      - postgres:/data/postgres
+    ports:
+      - "${POSTGRESQL_DB_PORT}:5432"
+    networks:
+      - microservices
+
+  ## crea el contenedor config-server en docker a partir del Dockerfile ubicado en ./config-server/Dockerfile.
+  config-server:
+    build:
+      context: .
+      dockerfile: ./config-server/Dockerfile
+    container_name: config-server
+    ports:
+      - "${CONFIG_SERVER_PORT}:8888"
+    networks:
+      - microservices
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://config-server:${CONFIG_SERVER_PORT}/actuator/health" ]
+      interval: 20s
+      timeout: 3s
+      retries: 5
+    restart: on-failure
+
+  # crea el contenedor eureka-server en docker a partir del Dockerfile ubicado en ./eureka-server/Dockerfile, y configura la dependencia con el config-server para asegurar que el eureka-server solo se inicie después de que el config-server esté saludable.
+  eureka-server:
+    build:
+      context: .
+      dockerfile: ./eureka-server/Dockerfile
+    container_name: eureka-server
+    depends_on:
+      config-server:
+        condition: service_healthy
+    ports:
+      - "${EUREKA_SERVER_PORT}:8761"
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
+    networks:
+      - microservices
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://eureka-server:${EUREKA_SERVER_PORT}/actuator/health" ]
+      interval: 20s
+      timeout: 3s
+      retries: 5
+    restart: on-failure
+
+  # crea el contenedor customer-microservice en docker a partir del Dockerfile ubicado en ./microservices/customer-microservice/Dockerfile, y configura las dependencias con el config-server, eureka-server y mongodb para asegurar que el customer-microservice solo se inicie después de que estos servicios estén saludables o iniciados.
+  customer-microservice:
+    build:
+      context: .
+      dockerfile: ./microservices/customer-microservice/Dockerfile
+    container_name: customer-microservice
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    ports:
+      - "${CUSTOMER_MICROSERVICE_PORT}:8091"
+    environment:
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:${EUREKA_SERVER_PORT}/eureka/
+      - SPRING_MONGODB_URI=mongodb://${MONGO_DB_USERNAME}:${MONGO_DB_PASSWORD}@mongodb:${MONGO_DB_PORT}/${CUSTOMER_DB_NAME}?authSource=admin
+    networks:
+      - microservices
+
+  # crea el contenedor product-microservice en docker a partir del Dockerfile ubicado en ./microservices/product-microservice/Dockerfile, y configura las dependencias con el config-server, eureka-server y postgresql para asegurar que el product-microservice solo se inicie después de que estos servicios estén saludables o iniciados.
+  product-microservice:
+    build:
+      context: .
+      dockerfile: ./microservices/product-microservice/Dockerfile
+    container_name: product-microservice
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+    ports:
+      - "${PRODUCT_MICROSERVICE_PORT}:8092"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgresql:${POSTGRESQL_DB_PORT}/${PRODUCT_DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRESQL_DB_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRESQL_DB_PASSWORD}
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:${CONFIG_SERVER_PORT}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:${EUREKA_SERVER_PORT}/eureka/
+    networks:
+      - microservices
+
+# Volumen para persistencia de datos de MongoDB.
+volumes:
+  mongo:
+  postgres:
+
+# network para conectar los servicios.
+networks:
+  microservices:
+    driver: bridge # usa el driver bridge para la red de Docker.

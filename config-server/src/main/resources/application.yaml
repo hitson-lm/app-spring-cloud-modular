@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: config-server
+
+  profiles:
+    active: native  # para usar configuración local y no buscar en un repositorio Git.
+
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: classpath:/config # Ubicación de los archivos de configuración locales. ./resources/config
+
+server:
+  port: 8888
+
+# Health actuator endpoint configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, beans, metrics, info, env
+  endpoint:
+    health:
+      show-details: always
